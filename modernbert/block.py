@@ -21,7 +21,7 @@ from .config import ModernBertPaperConfig
 from .mlp import ModernBertPaperMLP
 
 
-class ModernBertPaperTransfrmerBlock(nn.Module): # model.py will call block times = num_hidden_layers
+class ModernBertPaperTransformerBlock(nn.Module): # model.py will call block times = num_hidden_layers
     def __init__(self, config: ModernBertPaperConfig, layer_id: int = 0): # layer_id for global or local atten
         super().__init__()
         self.norm1 = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps) # normalizes the hidden representation before attention.
