@@ -27,3 +27,4 @@ class ModernBertPaperEmbeddings(nn.Module):
 
         x = self.norm(x)    # change values not shape, dim [batch_size, seq_len, hidden_size]
         x = self.dropout(x) # after this go to transformer
+        return x

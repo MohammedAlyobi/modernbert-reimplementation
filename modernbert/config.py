@@ -1,4 +1,4 @@
-from dataclasses import asdict, datacalss
+from dataclasses import asdict, dataclass
 
 
 @dataclass  # Without it you'd hand-write thirty lines of self.vocab_size = vocab_size
@@ -16,7 +16,7 @@ class ModernBertPaperConfig:
     layer_norm_eps: float = 1e-12
     initializer_range: float = 0.02
     pad_token_id: int = 0
-    embidding_layer: str = "sans_pos"
+    embedding_layer: str = "sans_pos"
     attention_layer: str = "rope"
     sliding_window: int = 128
     global_attn_every_n_layers: int = 3
@@ -27,8 +27,8 @@ class ModernBertPaperConfig:
 
     attn_qkv_bias: bool = False
     attn_out_bias: bool = False
-    mil_in_bias: bool = False
     mlp_in_bias: bool = False
+    mlp_out_bias: bool = False
 
     def to_dict(self):
         return asdict(self)

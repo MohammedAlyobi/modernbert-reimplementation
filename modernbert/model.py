@@ -1,3 +1,60 @@
+'''
+                  INPUT
+                    │
+                    ▼
+              input_ids [B,S]
+                    │
+                    ▼
+               Embeddings
+                    │
+                    ▼
+                [B,S,H]
+                    │
+                    ▼
+        ┌───────────────────────┐
+        │   Transformer Block   │
+        │                       │
+        │ Pre-LN → Attention    │
+        │      + residual       │
+        │ Pre-LN → GeGLU MLP    │
+        │      + residual       │
+        └───────────────────────┘
+                    │
+                  repeat
+                    │
+                    ▼
+              Final LayerNorm
+                    │
+                    ▼
+                [B,S,H]
+                    │
+                    ▼
+              MLM head dense
+                    │
+                    ▼
+                  GELU
+                    │
+                    ▼
+               Head LayerNorm
+                    │
+                    ▼
+             LM vocabulary head
+                    │
+                    ▼
+              logits [B,S,V]
+                    │
+             ┌──────┴──────┐
+             │             │
+          no labels      labels
+             │             │
+             ▼             ▼
+        return logits   CrossEntropy
+                           │
+                           ▼
+                          loss
+'''
+
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F # functional operations -> cross_entropy
@@ -19,8 +76,8 @@ class ModernBertPaperModel(nn.Module): # input IDs → contextual hidden represe
     """Compact encoder-only ModernBERT-style model."""
 
     def __init__(self, config: ModernBertPaperConfig):
-        super.__init__()
-        self.confing = config
+        super().__init__()
+        self.config = config
         self.embeddings = ModernBertPaperEmbeddings(config) # [B, S] → [B, S, H]
         self.layers = nn.ModuleList( # These are neural-network submodules whose parameters need to be tracked, not only normal list
             # create n blocks, each with its own attention and MLP sublayers
@@ -50,7 +107,7 @@ class ModernBertPaperModel(nn.Module): # input IDs → contextual hidden represe
             raise ValueError(f"Expected input_ids to be of shape [batch, sequence_length], but got {input_ids.shape}")
         if input_ids.size(1) > self.config.max_position_embeddings: # So here max_position_embeddings is effectively acting as your maximum supported sequence length/context limit. CAUSE WE USE Rope not absolute position embeddings, so we can support longer sequences than the model was trained on.
             raise ValueError(f"Sequence length {input_ids.size(1)} exceeds maximum position embeddings {self.config.max_position_embeddings}")
-        if attention_mask is not None and attention_mask.shape != input_ids.shape():
+        if attention_mask is not None and attention_mask.shape != input_ids.shape:
             raise ValueError(f"Expected attention_mask to be of shape {tuple(input_ids.shape)}, but got {tuple(attention_mask.shape)}")
 
         x = self.embeddings(input_ids) # [B, S] → [B, S, H]
@@ -75,7 +132,7 @@ vocabulary logits
    ↓
 cross entropy loss
 '''
-class ModernBertPaperForMaskedLM(nn.Module): # wraps the encoder with a prediction head.
+class ModernBertPaperForMaskedLM(nn.Module): # wraps the encoder with a prediction head. The pretraining model:
     """ModernBERT-style model with a masked language modeling head on top."""
 
     def __init__(self, config: ModernBertPaperConfig):
@@ -84,9 +141,9 @@ class ModernBertPaperForMaskedLM(nn.Module): # wraps the encoder with a predicti
         self.model = ModernBertPaperModel(config) # create the encoder
         self.head_dense = nn.Linear(config.hidden_size, config.hidden_size) # H→H, no dim change like encoder
         self.head_norm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps) if config.head_pred_norm else nn.Identity()
-        self.head_act = nn.GELU() if config.hidden_pred_act.lower() == "gelu" else nn.Identity()
+        self.head_act = nn.GELU() if config.head_pred_act.lower() == "gelu" else nn.Identity()
         self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=config.head_pred_bias) # Vocab projection: This is where each hidden vector becomes a vocabulary prediction. [B,S,768] -> [B,S,30522]
-        self.lm_head.weight = self.model.embeddings.word_embeddings.weight # You're tying the input embedding weights and output vocabulary projection weights. So the same learned matrix is used for both.
+        self.lm_head.weight = self.model.embeddings.token_embedding.weight # You're tying the input embedding weights and output vocabulary projection weights. So the same learned matrix is used for both.
 
     def forward(
         self,

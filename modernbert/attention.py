@@ -12,7 +12,7 @@ class RotaryEmbedding(nn.Module):
             raise ValueError("RoPE dimension must be even.")
 
         inv_freq = 1.0 / (base ** (torch.arange(0, dim, 2, dtype=torch.float32) / dim))
-        self.register_buffer("inv_freq", inv_freq, presistent=False) # after model.to(cuda) -> buffer = stored with the module but not learned
+        self.register_buffer("inv_freq", inv_freq, persistent=False) # after model.to(cuda) -> buffer = stored with the module but not learned
 
     def forward(self, x: torch.Tensor, seq_len: int | None = None):
         device = x.device # This matters because tensors involved in the same operation need to be on compatible devices.
@@ -140,10 +140,10 @@ class ModernBertPaperSelfAttention(nn.Module):
     """Reference attention with RoPE and ModernBERT-style local/global masking."""
 
     def __init__(self, config: ModernBertPaperConfig, layer_id: int = 0):
-        super.__init__()
+        super().__init__()
         self.hidden_size = config.hidden_size
         self.num_heads = config.num_attention_heads
-        self.head_dim = self,self.hidden_size // self.num_heads
+        self.head_dim = self.hidden_size // self.num_heads
         if self.hidden_size % self.num_heads != 0:
             raise ValueError("hideen_size must be divisble by num_attentions_heads")
 
@@ -178,7 +178,7 @@ class ModernBertPaperSelfAttention(nn.Module):
         # "std shape for multi-head-attention"                                
         q = q.view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1, 2) 
         k = k.view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1, 2)
-        v = k.view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1, 2)
+        v = v.view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1, 2)
 
         q = self.rotary(q, seq_len=seq_len)
         k = self.rotary(k, seq_len=seq_len)
@@ -246,7 +246,7 @@ class ModernBertPaperSelfAttention(nn.Module):
 
             This creates the local attention pattern.
             '''
-            scores = scores.masked_fill(~valid, torch.info(scores.dtype).min)
+            scores = scores.masked_fill(~valid, torch.finfo(scores.dtype).min)
             '''
             37. Mask invalid scores
             scores = scores.masked_fill(
