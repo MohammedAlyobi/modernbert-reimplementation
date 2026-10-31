@@ -16,14 +16,14 @@ class ModernBertPaperEmbeddings(nn.Module):
         super().__init__()
 
         # lookup table with dim [30522, 768]
-        self.token_embiddings = nn.Embedding(config.vocab_size, config.hidden_size, padding_idx=config.pad_token_id)
+        self.token_embedding = nn.Embedding(config.vocab_size, config.hidden_size, padding_idx=config.pad_token_id)
 
         self.norm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps, bias=config.norm_bias)
-        self.dropout = nn.Dropout(config.hidden_dropout_prob)
+        self.dropout = nn.Dropout(config.embed_dropout_prob)
 
     def forward(self, input_ids: torch.tensor) -> torch.Tensor:
         # This performs the lookup, dim [30522, 768] -> [batch_size, seq_len, hidden_size]
-        x = self.token_embiddings(input_ids)
+        x = self.token_embedding(input_ids)
 
         x = self.norm(x)    # change values not shape, dim [batch_size, seq_len, hidden_size]
         x = self.dropout(x) # after this go to transformer

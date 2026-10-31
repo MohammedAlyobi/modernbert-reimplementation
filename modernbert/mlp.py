@@ -120,7 +120,7 @@ class ModernBertPaperMLP(nn.Module): # This creates your MLP as a standard PyTor
 
         So your MLP and attention are consistent.        
         '''
-        self.dropout = nn.Dropout(config.hidden_dropout_prob)
+        self.dropout = nn.Dropout(config.mlp_dropout_prob)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         hidden = F.gelu(self.gate_proj(x)) * self.up_proj(x)

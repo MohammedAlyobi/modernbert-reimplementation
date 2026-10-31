@@ -2,9 +2,9 @@
 
 Requires `pip install transformers` (no GPU, no flash-attn). Two modes:
 
-  python -m CompactModernBERT.compactmodernbert.modularized_code.compare_with_hf
+  python -m modernbert.compare_with_hf
       -> builds a TINY random HF ModernBERT, copies its weights into our model, compares outputs.
-  python -m CompactModernBERT.compactmodernbert.modularized_code.compare_with_hf --pretrained answerdotai/ModernBERT-base
+  python -m modernbert.compare_with_hf --pretrained answerdotai/ModernBERT-base
       -> same, with the released checkpoint (downloads ~600 MB from the Hugging Face Hub).
 """
 

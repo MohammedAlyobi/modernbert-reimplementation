@@ -1,4 +1,4 @@
-# Modularized ModernBERT reference
+# modernbert — ModernBERT reference reimplementation
 
 A readable, padded, dense-attention implementation of ModernBERT that is numerically identical
 to the Hugging Face `ModernBertForMaskedLM` (max abs error ~1e-7 in fp32, see `compare_with_hf.py`).
@@ -35,18 +35,18 @@ Defaults reproduce **ModernBERT-base** (22 layers, hidden 768, GeGLU 2 x 1152, v
 
 ## Running
 
-From the `CompactModernBERT` folder:
+From the `modernbert-reimplementation` folder:
 
 ```bash
 python -m pytest tests/test_modularized_code.py -v          # staged tests (Stages 0-7)
 ```
 
-From the `clone` folder (requires `pip install transformers` for the second command):
+Also from the `modernbert-reimplementation` folder (`pip install transformers` needed for the comparison):
 
 ```bash
-python -c "from CompactModernBERT.compactmodernbert.modularized_code import build_paper_reference_example as b; c, m, o = b(); print(o['logits'].shape, float(o['loss']))"
-python -m CompactModernBERT.compactmodernbert.modularized_code.compare_with_hf
-python -m CompactModernBERT.compactmodernbert.modularized_code.compare_with_hf --pretrained answerdotai/ModernBERT-base
+python -c "from modernbert import build_paper_reference_example as b; c, m, o = b(); print(o['logits'].shape, float(o['loss']))"
+python -m modernbert.compare_with_hf
+python -m modernbert.compare_with_hf --pretrained answerdotai/ModernBERT-base
 ```
 
 ## Weight-name mapping to Hugging Face / reference

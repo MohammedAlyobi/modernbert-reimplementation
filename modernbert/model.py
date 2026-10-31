@@ -84,8 +84,6 @@ class ModernBertPaperModel(nn.Module): # input IDs → contextual hidden represe
             # create n blocks, each with its own attention and MLP sublayers
             [ModernBertPaperTransformerBlock(config, layer_id = i) for i in range(config.num_hidden_layers)]
         )
-        self.norm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps) # After all Transformer blocks, you apply another normalization:
-        
         self.norm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps, bias=config.norm_bias)
         init_modernbert_weights(self, config) 
 
@@ -129,7 +127,7 @@ class ModernBertPaperForMaskedLM(nn.Module): # wraps the encoder with a predicti
         self.head_dense = nn.Linear(config.hidden_size, config.hidden_size, bias=config.head_pred_bias) # H→H, no dim change like encoder
         self.head_act = nn.GELU() if config.head_pred_act.lower() == "gelu" else nn.Identity()
         self.head_norm = (
-            nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps) 
+            nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps, bias=config.norm_bias) 
             if config.head_pred_norm 
             else nn.Identity()
         )
@@ -156,7 +154,7 @@ class ModernBertPaperForMaskedLM(nn.Module): # wraps the encoder with a predicti
             # Returns logits of shape [num_masked, V] instead of [B, S, V]; the loss is identical.
             flat_labels = labels.reshape(-1) # [B*S]
             selected = flat_labels != -100 # [B*S] boolean mask: True = calculate loss here
-            logits = self.head(hidden.reshape(-1, hidden.size(-1)))[selected] # [B*S, H] -> [num_masked, V]
+            logits = self.head(hidden.reshape(-1, hidden.size(-1))[selected]) # select masked rows FIRST: [num_masked, H] -> [num_masked, V]
             loss = F.cross_entropy(logits, flat_labels[selected]) # only calculate loss for masked positions
             return {"logits": logits, "loss": loss}
 

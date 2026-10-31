@@ -6,13 +6,13 @@ from .config import ModernBertPaperConfig
 class RotaryEmbedding(nn.Module):
     """Rotary positional embeddings (RoPE) for query/key pairs."""
 
-    def __init__(self, dim: int, base: float = 10000.0):
+    def __init__(self, dim: int, base: float = 10000.0, interleaved: bool = False):
         super().__init__()
         if dim % 2 != 0:
             raise ValueError("RoPE dimension must be even.")
         self.dim = dim
         self.base = base
-        self.interleaved = self.interleaved
+        self.interleaved = interleaved 
         inv_freq = 1.0 / (base ** (torch.arange(0, dim, 2, dtype=torch.float32) / dim))
         self.register_buffer("inv_freq", inv_freq, persistent=False) # after model.to(cuda) -> buffer = stored with the module but not learned
 
@@ -39,7 +39,7 @@ class RotaryEmbedding(nn.Module):
         xf = x.float() # compute rotation in fp32, like the reference kernals
         if self.interleaved:
             x1, x2 = xf[..., 0::2], xf[..., 1::2] # split into even and odd dimensions
-            out = torch.stack([x1 * cos - x2 * sin, x1 * sin + x2 * cos], dim=-1) # apply rotation
+            out = torch.stack([x1 * cos - x2 * sin, x1 * sin + x2 * cos], dim=-1).flatten(-2) # apply rotation
         else:
             half = self.dim // 2
             x1, x2 = xf[..., :half], xf[..., half:] # split into first half and second half
@@ -71,7 +71,7 @@ class ModernBertPaperSelfAttention(nn.Module):
         # better optimization during training. if hidden = 768, then 3*hidden = 2304, so the output of 
         # this layer will be [batch, seq_len, 2304], which we can then split into Q, K, V.
                 
-        self.out_proj = nn.Linear(self.hidden_size, self.hidden_size, bias=attn_out_bias) 
+        self.out_proj = nn.Linear(self.hidden_size, self.hidden_size, bias=config.attn_out_bias) 
         # This projection transforms [batch, seq, hidden_size] again.
         # attention result -> output projection -> hidden states
         
@@ -145,10 +145,6 @@ class ModernBertPaperSelfAttention(nn.Module):
                                                                                # Q: [batch, heads, seq, head_dim]
                                                                                # K transpose: [batch, heads, head_dim, seq]
 
-            
-            
-        scores = torch.matmul(q, k.transpose(-2, -1)) / (self.head_dim ** 0.5) # calc att scores,
-                                                                               # scaled dot-product attention equation
         allowed = self.build_attention_mask(seq_len, attention_mask, x.device) # [B or 1, 1, S, S] mask: True = query may attend to key.
         scores = scores.masked_fill(~allowed, torch.finfo(scores.dtype).min) # masked positions get -
 
