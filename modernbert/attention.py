@@ -24,19 +24,7 @@ class RotaryEmbedding(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         cos, sin = self.cos_sin(x.size(-2), x.device) # [S, dim/2], broadcasts over [B, heads]
 
-        """Your tensor is: [batch, heads, seq, head_dim]
-
-        So: x.size(-2) means: sequence dimension
-
-        For example:
-
-        [8, 12, 128, 64]
-                ↑
-            -2
-        giving: 128
-        """
-
-        xf = x.float() # compute rotation in fp32, like the reference kernals
+        xf = x.float() # compute rotation in fp32
         if self.interleaved:
             x1, x2 = xf[..., 0::2], xf[..., 1::2] # split into even and odd dimensions
             out = torch.stack([x1 * cos - x2 * sin, x1 * sin + x2 * cos], dim=-1).flatten(-2) # apply rotation
@@ -62,15 +50,7 @@ class ModernBertPaperSelfAttention(nn.Module):
         self.head_dim = self.hidden_size // self.num_heads
         self.layer_id = layer_id
 
-        
-        # Packed projection: output columns are [Q | K | V], each split into heads.
-        # Same memory layout as the reference Wqkv -> view(B, S, 3, heads, head_dim).
-        self.qkv_proj = nn.Linear(self.hidden_size, 3 * self.hidden_size, bias=config.attn_qkv_bias) # This matches the bias-free linear-layer design to reproduce.
-        # Instead of creating three separate layers for QKV, we can create a single linear layer 
-        # that outputs all three concatenated together. This is more efficient and allows for 
-        # better optimization during training. if hidden = 768, then 3*hidden = 2304, so the output of 
-        # this layer will be [batch, seq_len, 2304], which we can then split into Q, K, V.
-                
+        self.qkv_proj = nn.Linear(self.hidden_size, 3 * self.hidden_size, bias=config.attn_qkv_bias) # bias-free linear-layer.
         self.out_proj = nn.Linear(self.hidden_size, self.hidden_size, bias=config.attn_out_bias) 
         # This projection transforms [batch, seq, hidden_size] again.
         # attention result -> output projection -> hidden states
@@ -100,45 +80,21 @@ class ModernBertPaperSelfAttention(nn.Module):
         return allowed
 
     
-    def forward(self, x: torch.Tensor, attention_mask: torch.Tensor | None = None): # input [bbatch, sequance, hidden] 
+    def forward(self, x: torch.Tensor, attention_mask: torch.Tensor | None = None): # input [batch, sequance, hidden] 
                                                                                     # optional attention mask 
                                                                                     # usually 1 -> real token 
-                                                                                    # 0 -> padding
+                                                                                    #         0 -> padding
         batch_size, seq_len, _ = x.shape
-        q, k, v = self.qkv_proj(x).chunk(3, dim=-1) # Split the concatenated QKV tensor into three separate tensors along the last dimension. 
-                                       # Each will have shape [batch, seq_len, hidden_size]. first column is Q, then K, then V
-
-        # [batch, seq_len, hidden_size] -> view [batch, seq, heads, head_dim] -> transpose [batch, heads, seq, head_dim] 
-        # "std shape for multi-head-attention"                                
+        q, k, v = self.qkv_proj(x).chunk(3, dim=-1) # Each will have shape [batch, seq_len, hidden_size].
+                                                    # [batch, seq_len, hidden_size] -> view [batch, seq, heads, head_dim] 
+                                                    #                               -> transpose [batch, heads, seq, head_dim] 
+                                                    # "std shape for multi-head-attention"                                
         q = q.view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1, 2) 
         k = k.view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1, 2)
         v = v.view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1, 2)
 
         q = self.rotary(q)
         k = self.rotary(k)
-        '''
-        This is the crucial ModernBERT positional operation.
-
-        Notice:
-
-        V is not rotated.
-
-        Only Q and K receive RoPE.
-
-        Why?
-
-        Because positional information affects the calculation of attention relationships:
-
-        $$ QK^T $$
-
-        while V contains the information that gets aggregated.
-
-        So:
-
-        Q → RoPE
-        K → RoPE
-        V → unchanged    
-        '''
 
         scores = torch.matmul(q, k.transpose(-2, -1)) / (self.head_dim ** 0.5) # calc att scores, 
                                                                                # scaled dot-product attention equation
@@ -146,37 +102,10 @@ class ModernBertPaperSelfAttention(nn.Module):
                                                                                # K transpose: [batch, heads, head_dim, seq]
 
         allowed = self.build_attention_mask(seq_len, attention_mask, x.device) # [B or 1, 1, S, S] mask: True = query may attend to key.
-        scores = scores.masked_fill(~allowed, torch.finfo(scores.dtype).min) # masked positions get -
+        scores = scores.masked_fill(~allowed, torch.finfo(scores.dtype).min)  
 
         attn = self.attn_dropout(torch.softmax(scores, dim=-1)) # During training, this can randomly drop some attention probabilities.
         out = torch.matmul(attn, v) # equation part when mult by V
         out = out.transpose(1, 2).contiguous().view(batch_size, seq_len, self.hidden_size)
-        '''
-        42. Merge heads
-        out = (
-            out.transpose(1, 2)
-            .contiguous()
-            .view(
-                batch_size,
-                seq_len,
-                self.hidden_size
-            )
-        )
-
-        Before:
-
-        [batch, heads, seq, head_dim]
-
-        Transpose:
-
-        [batch, seq, heads, head_dim]
-
-        Then flatten:
-
-        [batch, seq, hidden]
-
-        because:
-
-        heads × head_dim = hidden_size        
-        '''
+        
         return self.out_dropout(self.out_proj(out)) # The merged representation passes through the output projection. output linear

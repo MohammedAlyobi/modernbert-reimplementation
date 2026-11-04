@@ -1,8 +1,7 @@
 from dataclasses import asdict, dataclass
 
 
-@dataclass  # Without it you'd hand-write thirty lines of self.vocab_size = vocab_size
-            # 3 A field only becomes a dataclass field if it has a type annotation. 
+@dataclass # A field only becomes a dataclass field if it has a type annotation. 
 class ModernBertPaperConfig:
     
     # --- sizes --------------------------------------------------------------------------

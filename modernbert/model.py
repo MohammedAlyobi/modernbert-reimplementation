@@ -1,60 +1,3 @@
-'''
-                  INPUT
-                    │
-                    ▼
-              input_ids [B,S]
-                    │
-                    ▼
-               Embeddings
-                    │
-                    ▼
-                [B,S,H]
-                    │
-                    ▼
-        ┌───────────────────────┐
-        │   Transformer Block   │
-        │                       │
-        │ Pre-LN → Attention    │
-        │      + residual       │
-        │ Pre-LN → GeGLU MLP    │
-        │      + residual       │
-        └───────────────────────┘
-                    │
-                  repeat
-                    │
-                    ▼
-              Final LayerNorm
-                    │
-                    ▼
-                [B,S,H]
-                    │
-                    ▼
-              MLM head dense
-                    │
-                    ▼
-                  GELU
-                    │
-                    ▼
-               Head LayerNorm
-                    │
-                    ▼
-             LM vocabulary head
-                    │
-                    ▼
-              logits [B,S,V]
-                    │
-             ┌──────┴──────┐
-             │             │
-          no labels      labels
-             │             │
-             ▼             ▼
-        return logits   CrossEntropy
-                           │
-                           ▼
-                          loss
-'''
-
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F # functional operations -> cross_entropy
@@ -64,15 +7,7 @@ from .config import ModernBertPaperConfig
 from .embeddings import ModernBertPaperEmbeddings
 from .initialization import init_modernbert_weights
 
-'''
-ModernBertPaperModel
 
-input IDs
-   ↓
-encoder
-   ↓
-hidden states
-'''
 class ModernBertPaperModel(nn.Module): # input IDs → contextual hidden representations
     """Compact encoder-only ModernBERT-style model."""
 
@@ -104,19 +39,7 @@ class ModernBertPaperModel(nn.Module): # input IDs → contextual hidden represe
 
         return self.norm(x) # final normalization after all blocks, [B, S, H], inside block is embeddings
 
-'''
-ModernBertPaperForMaskedLM
 
-input IDs
-   ↓
-encoder
-   ↓
-MLM head
-   ↓
-vocabulary logits
-   ↓
-cross entropy loss
-'''
 class ModernBertPaperForMaskedLM(nn.Module): # wraps the encoder with a prediction head. The pretraining model:
     """ModernBERT-style model with a masked language modeling head on top."""
 
@@ -134,7 +57,7 @@ class ModernBertPaperForMaskedLM(nn.Module): # wraps the encoder with a predicti
         # Decoder bias: the paper keeps this ONE bias to soften the effect of weight tying.
         self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=config.decoder_bias) # Vocab projection: This is where each hidden vector becomes a vocabulary prediction. [B,S,768] -> [B,S,30522]
         if config.tie_word_embeddings:
-            self.lm_head.weight = self.model.embeddings.token_embedding.weight # You're tying the input embedding weights and output vocabulary projection weights. So the same learned matrix is used for both.
+            self.lm_head.weight = self.model.embeddings.token_embedding.weight 
         # Initialize the whole model (encoder again + head) with the ModernBERT scheme. 
         init_modernbert_weights(self, config) 
 

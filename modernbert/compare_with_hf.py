@@ -14,7 +14,7 @@ import torch
 
 from .config import ModernBertPaperConfig
 from .model import ModernBertPaperForMaskedLM
-
+ 
 
 def config_from_hf(hf_cfg) -> ModernBertPaperConfig:
     rope = hf_cfg.rope_parameters
